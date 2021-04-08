@@ -46,6 +46,6 @@ def mass_dist(eta):
     J[2,1] = J_yz 
     J[2,2] = J_zz 
 
-    J = J/(10^9)/103.47649*mass  # [kg*m^2]
+    J = J/(10**9)/103.47649*mass  # [kg*m^2]
 
     return J, p_ref

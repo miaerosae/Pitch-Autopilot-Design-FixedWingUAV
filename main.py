@@ -7,7 +7,7 @@ from sympy import *
 from spec_data import *
 from mass_dist import mass_dist
 from trim import trim_calc
-from Dyn import *
+from Dyn import Dyn_LQR
 from state_eq import get_rho
 from fym.core import BaseEnv, BaseSystem
 from fym.agents import LQR
@@ -38,6 +38,21 @@ alpha0  = alpha_t
 Q0      = x_t[4,0]
 delT0   = u_t[0,0]
 dele0   = u_t[2,0]
+
+ic = np.array([VT0, gamma0, h0, alpha0, Q0, delT0, dele0])
+
+## for VT tracking
+#VT0_2   = 25
+#VT0_3   = 15
+#x_t2, u_t2, alpha_t2, Err2 = trim_calc(z_guess, VT0_2, h0, eta0)
+#x_t3, u_t3, alpha_t3, Err3 = trim_calc(z_guess, VT0_3, h0, eta0)
+#delT0_2 = u_t2[0,0]; dele0_2 = u_t2[2,0]; Q0_2 = x_t2[4,0];
+#delT0_3 = u_t3[0,0]; dele0_3 = u_t3[2,0]; Q0_3 = x_t3[4,0];
+#
+#ic1 = np.vstack([VT0, gamma0, h0, alpha0, Q0])
+#ic2 = np.vstack([VT0_2, gamma0, h0, alpha0_2, Q0_2])
+#ic3 = np.vstack([VT0_3, gamma0, h0, alpha0_3, Q0_3])
+
 
 J, *_ = mass_dist(eta0)
 
@@ -98,8 +113,14 @@ B_trim = np.vectorize(lambda x: x.subs({VT:VT0, gamma:gamma0, h:h0, alpha:alpha0
 class Env(BaseEnv):
     def __init__(self):
         super().__init__(dt=0.05, max_t=50)
-
+        
+        # for level flight
         self.x = BaseSystem(np.vstack([VT0+5, gamma0, h0+30, alpha0, Q0]))
+
+        ## for VT tracking
+#        t = self.clock.get()
+#        if t < 10:
+#            self.x = BaseSystem(np.vstack
         self.A = A_trim
         self.B = B_trim
         
@@ -123,6 +144,7 @@ class Env(BaseEnv):
         u = -self.K.dot(x)
         self.x.dot = self.A.dot(x) + self.B.dot(u)
 
+
 def run():
     env = Env()
     x = env.reset()
@@ -135,6 +157,7 @@ def run():
         
         if done:
             break
+    return env.K
 
     env.close()
 
@@ -158,50 +181,52 @@ def plot_var():
     ax4.set_ylabel('alpha [deg]'); ax5.set_ylabel('Q')
     ax1.grid(True); ax2.grid(True); ax3.grid(True); ax4.grid(True); ax5.grid(True);
 
-    plt.suptitle('LQR Simulation : State variables vs t', fontsize=15)
-    plt.show()
-
-run()
-plot_var()
-
-# simulate nonlinear equation with K (calculated by linearized A, B), using RK4 method
-#step = 0.05
-#t = np.linspace(0,50,50/step)
-#x = np.zeros((len(t), 5))
-#x[0,:] = np.vstack([VT0+5, gamma0, h0+30, alpha0, Q0])
-#
-#k1 = np.zeros((5,1))
-#k2 = np.zeros((5,1))
-#k3 = np.zeros((5,1))
-#k4 = np.zeros((5,1))
-#
-#for i in range(len(t)-1):
-#    k1 = Dyn_nonlinear(t[i], x[i,:])
-#    k2 = Dyn_nonlinear(t[i]+step/2, x[i,:]+step*k1/2)
-#    k3 = Dyn_nonlinear(t[i]+step/2, x[i,:]+step*k2/2)
-#    k4 = Dyn_nonlinear(t[i]+step, x[i,:]+step*k3)
-#    x[i+1,:] = x[i,:] + (k1/6 + k2/3 + k3/3 + k4/6)*step
-#
-#def plot_var_RK4():
-#    fig2 = plt.figure()
-#    ax1     = fig.add_subplot(5,1,1)
-#    ax2     = fig.add_subplot(5,1,2)
-#    ax3     = fig.add_subplot(5,1,3)
-#    ax4     = fig.add_subplot(5,1,4)
-#    ax5     = fig.add_subplot(5,1,5)
-#    
-#    ax1.plot(t, x[:,0])
-#    ax2.plot(t, x[:,1])
-#    ax3.plot(t, x[:,2])
-#    ax4.plot(t, x[:,3])
-#    ax5.plot(t, x[:,4])
-#    ax1.set_xlabel('t [sec]'); ax2.set_xlabel('t [sec]'); ax3.set_xlabel('t [sec]');
-#    ax4.set_xlabel('t [sec]'); ax5.set_xlabel('t [sec]');
-#    ax1.set_ylabel('VT [m/s]'); ax2.set_ylabel('gamma [deg]'); ax3.set_ylabel('h [m]');
-#    ax4.set_ylabel('alpha [deg]'); ax5.set_ylabel('Q')
-#
-#    plt.subtitle('LQR Simulation : Linearized K for nonlinear system : State variables vs t', fontsize=15);
-#    plt.grid(True)
+    plt.suptitle('Level flight : LQR Simulation for linearized system', fontsize=15)
 #    plt.show()
-#
-#plot_var_RK4()
+    plt.savefig('LQR_Level_flight_linearsystem.png', dpi=200)
+
+K = run()
+plot_var()
+# simulate nonlinear equation with K (calculated by linearized A, B), using RK4 method
+step = 0.05
+t = np.linspace(0,50,1000)
+x = np.zeros((1000, 5))
+x[0,:] = np.array([VT0+5, gamma0, h0+30, alpha0, Q0])
+
+k1 = np.zeros((5,))
+k2 = np.zeros((5,))
+k3 = np.zeros((5,))
+k4 = np.zeros((5,))
+
+for i in range(0, 999):
+    k1 = Dyn_LQR(t[i], x[i,:], ic, K)
+    k2 = Dyn_LQR(t[i]+step/2, x[i,:]+step*k1/2, ic, K)
+    k3 = Dyn_LQR(t[i]+step/2, x[i,:]+step*k2/2, ic, K)
+    k4 = Dyn_LQR(t[i]+step, x[i,:]+step*k3, ic, K)
+    x[i+1,:] = x[i,:] + (k1/6 + k2/3 + k3/3 + k4/6)*step
+
+def plot_var_RK4():
+    fig2 = plt.figure()
+    ax1     = fig2.add_subplot(5,1,1)
+    ax2     = fig2.add_subplot(5,1,2)
+    ax3     = fig2.add_subplot(5,1,3)
+    ax4     = fig2.add_subplot(5,1,4)
+    ax5     = fig2.add_subplot(5,1,5)
+    
+    ax1.plot(t, x[:,0])
+    ax2.plot(t, x[:,1])
+    ax3.plot(t, x[:,2])
+    ax4.plot(t, x[:,3])
+    ax5.plot(t, x[:,4])
+    ax1.set_xlabel('t [sec]'); ax2.set_xlabel('t [sec]'); ax3.set_xlabel('t [sec]');
+    ax4.set_xlabel('t [sec]'); ax5.set_xlabel('t [sec]');
+    ax1.set_ylabel('VT [m/s]'); ax2.set_ylabel('gamma [deg]'); ax3.set_ylabel('h [m]');
+    ax4.set_ylabel('alpha [deg]'); ax5.set_ylabel('Q')
+
+    ax1.grid(True); ax2.grid(True); ax3.grid(True); ax4.grid(True); ax5.grid(True);
+    plt.suptitle('Level flight : LQR Simulation for nonlinear system', fontsize=15);
+#    plt.show()
+    plt.savefig('LQR_Level_flight_nonlinearsystem.png', dpi=200)
+
+
+plot_var_RK4()

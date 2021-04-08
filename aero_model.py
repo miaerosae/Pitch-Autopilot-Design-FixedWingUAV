@@ -7,9 +7,9 @@ from aero_data import *
 def aero_model(alpha, bet, VT, h, eta, P, Q, R, dela, dele, delr):
     eta1 = eta[0,0]
     eta2 = eta[1,0]
-
+    
     # trimming
-    alp_trm  = min(max(min(alp_grd),alpha),max( alp_grd)) 
+    alp_trm  = min(max(min(alp_grd),alpha),max(alp_grd)) 
     dele_trm = min(max(min(dele_grd),dele),max(dele_grd)) 
     eta1_trm = min(max(min(eta1_grd),eta1),max(eta1_grd)) 
     eta2_trm = min(max(min(eta2_grd),eta2),max(eta2_grd)) 
